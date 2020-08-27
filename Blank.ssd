@@ -1,0 +1,15 @@
+--2020-08-27 19:00:16--  https://stardot.org.uk/forums/download/file.php?id=55155
+Resolving stardot.org.uk (stardot.org.uk)... 82.148.225.178
+Connecting to stardot.org.uk (stardot.org.uk)|82.148.225.178|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 204800 (200K) [application/octet-stream]
+Saving to: ‘file.php?id=55155’
+
+     0K .......... .......... .......... .......... .......... 25%  415K 0s
+    50K .......... .......... .......... .......... .......... 50%  501K 0s
+   100K .......... .......... .......... .......... .......... 75% 96.2K 0s
+   150K .......... .......... .......... .......... ..........100%  425K 0s
+   200K                                                       100% 0.00 =0.9s
+
+2020-08-27 19:00:17 (233 KB/s) - ‘file.php?id=55155’ saved [204800/204800]
+

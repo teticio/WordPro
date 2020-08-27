@@ -1,0 +1,742 @@
+10 brkv=&202
+20 osasci=&FFE3
+30 osbyte=&FFF4
+40 oscli=&FFF7
+50 osfile=&FFDD
+60 osnewl=&FFE7
+70 osrdch=&FFE0
+80 osword=&FFF1
+90 oswrch=&FFEE
+100 last=&74FF
+110 screenst=&7C00
+120 block=&100
+130 lines=&19
+140 length=&28
+150 textstart=&70
+160 textend=&72
+170 mempos=&74
+180 textptrs=&75
+190 temp=&76
+200 gtext=&78
+210 hpos=&7C
+220 vpos=&7D
+230 curpos=&7E
+240 retaddr=&FD
+250 FOR opt%=0 TO 3
+260 P%=&7500
+270 [ OPT opt%
+280 LDA #&04 ;Make cursor keys return ASCII codes
+290 LDX #&01
+300 JSR osbyte
+310 LDA #break MOD 256 ;Point BRK vector to new BRK handler
+320 STA brkv
+330 LDA #break DIV 256
+340 STA brkv+1
+350 LDA #&83 ;Calculate 0S high water mark (OSHWM)
+360 JSR osbyte
+370 STX textstart ;and store it in textstart and textend
+380 STY textstart+1
+390 STX textend
+400 STY textend+1
+410 .textptrs LDA textstart ;Define curpos and mempos
+420 STA curpos
+430 STA mempos
+440 LDA textstart+1
+450 STA curpos+1
+460 STA mempos+1
+470 LDA #&00 ;Set cursor to top left
+480 STA hpos
+490 STA vpos
+500 .menu LDA #&16 ;Select MODE 7 for screen mode
+510 JSR oswrch
+520 LDA #&07
+530 JSR oswrch
+540 LDX #&07 ;7 lines to be printed
+550 LDY #&00 ;Start count at zero
+560 .mloop LDA mtext,Y
+570 JSR osasci ;Print menu
+580 INY
+590 CMP #&0D ;End of a menu item?
+600 BNE mloop ;No, get remaining letters
+610 DEX ;Update counter
+620 BNE mloop
+630 .mloop2 JSR osrdch ;Input a character from keyboard
+640 BCC mnoerr ;Check if ESCAPE was pressed
+650 CMP #&1B
+660 BNE mnoerr
+670 LDA #&7E ;Acknowledge ESCAPE condition
+680 JSR osbyte
+690 JMP mloop2 ;and try again
+700 .mnoerr CMP #ASC("*") ;Validate input (1-4 or %)
+710 BEQ mcase
+720 CMP #ASC("1")
+730 BCC mloop2
+740 CMP #ASC("5")
+750 BCS mloop2
+760 .mcase CMP #ASC("1") ;Case A of ...
+770 BNE mnotload
+780 JMP load
+790 .mnotload CMP #ASC("2")
+800 BNE mnotsave
+810 JMP save
+820 .mnotsave CMP #ASC("3")
+830 BNE mnotedit
+840 JMP edit
+850 .mnotedit CMP #ASC("4")
+860 BNE mnotprint
+870 JMP print
+880 .mnotprint JMP oscom
+890 .mtext EQUS "                "
+900 EQUS "WORDPRO"
+910 EQUB &0D
+920 EQUB &0D
+930 EQUS "1. Load a file"
+940 EQUB &0D
+950 EQUS "2. Save a file"
+960 EQUB &0D
+970 EQUS "3. Edit a file"
+980 EQUB &0D
+990 EQUS "4. Print a file"
+1000 EQUB &0D
+1010 EQUS "*. OS command"
+1020 EQUB &0D
+1030 .load JSR osnewl ;Output a carriage return
+1040 LDX #&00 ;Prompt user for input
+1050 .lloop LDA ltext,X
+1060 CMP #&0D
+1070 BEQ lout
+1080 JSR osasci
+1090 INX
+1100 JMP lloop
+1110 .lout LDA #&0C ;Input parameter ~ max. line length
+1120 JSR input
+1130 BCC lover
+1140 JMP menu
+1150 .lover LDA #buffer MOD 256 ;Set up a block for loading
+1160 STA block ;Block 0-1 address of filename
+1170 LDA #buffer DIV 256
+1180 STA block+1
+1190 LDA textstart ;Block 2-5 load address
+1200 STA block+2
+1210 LDA textstart+1
+1220 STA block+3
+1230 LDA #&00
+1240 STA block+4
+1250 STA block+5
+1260 STA block+6 ;Block 6 load address flag
+1270 LDA #&FF ;OSFILE command (load file)
+1280 LDX #block MOD 256
+1290 LDY #block DIV 256
+1300 JSR osfile
+1310 LDA block+10 ;Calculate new textend
+1320 CLC
+1330 ADC textstart
+1340 STA textend
+1350 LDA block+11
+1360 ADC textstart+1
+1370 STA textend+1
+1380 JMP textptrs
+1390 .ltext EQUS "File to load: "
+1400 EQUB &0D
+1410 .save JSR osnewl ;Output a carriage return
+1420 LDX #&00 ;Prompt user for input
+1430 .sloop LDA stext,X
+1440 CMP #&0D
+1450 BEQ sout
+1460 JSR osasci
+1470 INX
+1480 JMP sloop
+1490 .sout LDA #&0C ;Input parameter - max. line length
+1500 JSR input
+1510 BCC sover
+1520 JMP menu
+1530 .sover LDA #buffer MOD 256 ;Set up a block for saving
+1540 STA block ;Block 0-1 address of filename
+1550 LDA #buffer DIV 256
+1560 STA block+1
+1570 LDA #&00 ;Block 2-5 load address
+1580 STA block+2
+1590 STA block+3
+1600 STA block+4
+1610 STA block+5
+1620 STA block+6 ;Block 6-9 execution address
+1630 STA block+7
+1640 STA block+8
+1650 STA block+9
+1660 LDA textstart ;Block 10-13 start of data to save
+1670 STA block+10
+1680 LDA textstart+1
+1690 STA block+11
+1700 LDA #&00
+1710 STA block+12
+1720 STA block+13
+1730 LDA textend ;Block 14-17 byte after end of data
+1740 STA block+14
+1750 LDA textend+1
+1760 STA block+15
+1770 LDA #&00
+1780 STA block+16
+1790 STA block+17
+1800 LDA #&00 ;OSFILE command (save file)
+1810 LDX #block MOD 256
+1820 LDY #block DIV 256
+1830 JSR osfile
+1840 JMP menu
+1850 .stext EQUS "Save as: "
+1860 EQUB &0D
+1870 .edit LDA #&FF ;Mark textend with rogue value &FF
+1880 LDY #&00
+1890 STA (textend),Y
+1900 .estart JSR display
+1910 LDA #&1F ;Display cursor
+1920 JSR oswrch
+1930 LDA hpos
+1940 JSR oswrch
+1950 LDA vpos
+1960 JSR oswrch
+1970 JSR osrdch ;Input a character from keyboard
+1980 CMP #&88 ;Case A of ...
+1990 BNE enotleft
+2000 JSR cleft
+2010 JMP estart
+2020 .enotleft CMP #&89
+2030 BNE enotright
+2040 JSR cright
+2050 JMP estart
+2060 .enotright CMP #&8A
+2070 BNE enotdown
+2080 JSR cdown
+2090 JMP estart
+2100 .enotdown CMP #&8B
+2110 BNE enotup
+2120 JSR cup
+2130 JMP estart
+2140 .enotup CMP #&7F
+2150 BNE enotrub
+2160 JSR rubout
+2170 JMP estart
+2180 .enotrub CMP #&0D
+2190 BEQ eover
+2200 CMP #&20
+2210 BCC enotwrite
+2220 CMP #&7F
+2230 BCS enotwrite
+2240 .eover JSR write
+2250 JMP estart
+2260 .enotwrite CMP #&1B
+2270 BNE enoerr
+2280 LDA #&7E ;Acknowledge ESCAPE condition
+2290 JSR osbyte
+2300 JMP menu
+2310 .enoerr JMP estart
+2320 .print LDA #&0C ;Clear the screen
+2330 JSR oswrch
+2340 LDA #&02 ;Turn the printer on
+2350 JSR oswrch
+2360 LDA textstart ;Set up text pointers
+2370 STA temp
+2380 LDA textstart+1
+2390 STA temp+1
+2400 LDA textend
+2410 STA temp+2
+2420 LDA textend+1
+2430 STA temp+3
+2440 LDY #&00
+2450 .ploop TXA ;Store registers
+2460 PHA
+2470 TYA
+2480 PHA
+2490 LDA #&79 ;Check if ESCAPE is being pressed
+2500 LDX #&F0
+2510 JSR osbyte
+2520 CPX #&00
+2530 BPL pok
+2540 LDA #&03 ;It is, so turn the printer off
+2550 JSR oswrch
+2560 LDA #&15 ;and flush the printer buffer
+2570 LDX #&03
+2580 JSR osbyte
+2590 PLA ;Clean up the stack
+2600 PLA
+2610 JMP menu
+2620 .pok PLA ;Retrieve registers
+2630 TAY
+2640 PLA
+2650 TAX
+2660 LDA temp ;Have we reached textend?
+2670 CMP temp+2
+2680 BNE pover
+2690 LDA temp+1
+2700 CMP temp+3
+2710 BEQ pout ;Yes, so return
+2720 .pover LDA (temp),Y
+2730 JSR osasci ;Print the character
+2740 INC temp ;Move to next character
+2750 BNE pnoinc
+2760 INC temp+1
+2770 .pnoinc JMP ploop
+2780 .pout LDA #&03 ;Turn the printer off
+2790 JSR oswrch
+2800 JSR osnewl
+2810 JSR getkey ;Wait for a key press
+2820 JMP menu
+2830 .oscom JSR osnewl ;Output a carriage return
+2840 LDA #ASC("*") ;and an asterisk as a prompt
+2850 JSR osasci
+2860 LDA #&FF ;Input parameter - max. line length
+2870 JSR input
+2880 LDX #buffer MOD 256 ;OSCLI command
+2890 LDY #buffer DIV 256
+2900 JSR oscli
+2910 JSR osnewl
+2920 JSR getkey ;Wait for a key press
+2930 JMP menu
+2940 .input PHA ;Save parameter on the stack
+2950 LDA #buffer MOD 256 ;Set up a block for input
+2960 STA block ;Block 0-1 address of buffer
+2970 LDA #buffer DIV 256
+2980 STA block+1
+2990 PLA ;Block 2 maximum line length
+3000 STA block+2
+3010 LDA #ASC(" ") ;Block 3 min. acceptable ASCII value
+3020 STA block+3
+3030 LDA #&7F ;Block 4 max. acceptable ASCII value
+3040 STA block+4
+3050 LDA #&00 ;OSWORD command (input string)
+3060 LDX #block MOD 256
+3070 LDY #block DIV 256
+3080 JSR osword
+3090 BCC iout ;Check if ESCAPE was pressed
+3100 LDA #&7E ;Acknowledge ESCAPE condition
+3110 JSR osbyte
+3120 JMP menu
+3130 .iout RTS
+3140 .getkey LDX #&00
+3150 .gloop LDA gtext,X ;Prompt user for a key press
+3160 BEQ gout
+3170 JSR osasci
+3180 INX
+3190 JMP gloop
+3200 .gout JSR osrdch ;Wait for a key press
+3210 BCC gout2 ;Check if ESCAPE was pressed
+3220 CMP #&1B
+3230 BNE gout2
+3240 LDA #&7E ;Acknowledge ESCAPE condition
+3250 JSR osbyte
+3260 .gout2 RTS
+3270 .gtext EQUS "Press any key."
+3280 EQUB &00
+3290 .break JSR osnewl ;Output a carriage return
+3300 LDY #&01 ;Output error message
+3310 .bloop LDA (retaddr),Y
+3320 BEQ bout
+3330 INY
+3340 JSR osasci
+3350 JMP bloop
+3360 .bout LDA #ASC(" ") ;Output a dash
+3370 JSR osasci
+3380 LDA #ASC("-")
+3390 JSR osasci
+3400 LDA #ASC(" ")
+3410 JSR osasci
+3420 JSR getkey ;Wait for a key press
+3430 PLA ;Discard unwanted return address
+3440 PLA
+3450 PLA ;and status register
+3460 JMP menu
+3470 .display LDA mempos ;Start displaying from mempos
+3480 STA temp
+3490 LDA mempos+1
+3500 STA temp+1
+3510 LDA #&00 ;Set end of text flag to false
+3520 STA temp+2
+3530 LDA #lines ;Set line count to lines
+3540 STA temp+3
+3550 LDA #screenst MOD 256 ;Define screen pointer
+3560 STA temp+4
+3570 LDA #screenst DIV 256
+3580 STA temp+5
+3590 LDY #&00
+3600 .dloop LDX #length ;Set row count to length
+3610 .dloop2 LDA (temp),Y ;Get character from text
+3620 CMP #&FF ;Text finished? (&FF is a rogue value)
+3630 BNE dnotend
+3640 STA temp+2 ;Yes, so set end of text flag to true
+3650 JMP dspaces
+3660 .dnotend CMP #&0D ;Is there a carriage return in text?
+3670 BEQ dspaces
+3680 BIT temp+2 ;Is the end of text flag set?
+3690 BEQ dover ;No, so skip dspaces
+3700 .dspaces LDA #ASC(" ") ;Print spaces to end of line
+3710 .dsloop STA (temp+4),Y
+3720 INC temp+4 ;Update counters
+3730 BNE dsnoinc
+3740 INC temp+5
+3750 .dsnoinc DEX
+3760 BNE dsloop
+3770 JMP dout
+3780 .dover STA (temp+4),Y ;Print current character
+3790 DEX ;Update counters
+3800 INC temp+4
+3810 BNE dout
+3820 INC temp+5
+3830 .dout INC temp
+3840 BNE dnoinc
+3850 INC temp+1
+3860 .dnoinc CPX #&00 ;Have we printed a whole line yet?
+3870 BNE dloop2 ;No, so do next character
+3880 DEC temp+3 ;Have we finished yet?
+3890 BNE dloop ;No, so do next line
+3900 RTS
+3910 .cleft LDA curpos ;Are we at textstart?
+3920 CMP textstart
+3930 BNE clok
+3940 LDA curpos+1
+3950 CMP textstart+1
+3960 BNE clok
+3970 RTS ;Yes, so return
+3980 .clok LDA curpos ;Decrement curpos
+3990 SEC
+4000 SBC #&01
+4010 STA curpos
+4020 LDA curpos+1
+4030 SBC #&00
+4040 STA curpos+1
+4050 LDA hpos ;Are we in the top left hand corner?
+4060 BNE clover2
+4070 LDA vpos
+4080 CMP #&00
+4090 BNE clover
+4100 JSR sdown ;Yes, so scroll down
+4110 JMP clover2
+4120 .clover DEC vpos ;Decrement vpos
+4130 .clover2 LDY #&00 ;Is there a carriage return at curpos?
+4140 LDA (curpos),Y
+4150 CMP #&0D
+4160 BNE clnocr
+4170 JSR nlcalc ;Yes, so get correct value for hpos
+4180 STA hpos
+4190 RTS
+4200 .clnocr LDA hpos ;Are we in the leftmost column?
+4210 BEQ clover3
+4220 DEC hpos ;No, so decrement hpos
+4230 RTS
+4240 .clover3 LDA #length-1 ;Set hpos to far right
+4250 STA hpos
+4260 RTS
+4270 .cright LDY #&00 ;Are we at the end of text?
+4280 LDA (curpos),Y
+4290 CMP #&FF
+4300 BNE crok
+4310 RTS ;Yes, so return
+4320 .crok INC curpos ;Increment curpos
+4330 BNE crnoinc
+4340 INC curpos+1
+4350 .crnoinc CMP #&0D ;Is there a carriage return at curpos?
+4360 BNE crnocr
+4370 LDA #&00 ;Yes, so set hpos to far left
+4380 STA hpos
+4390 JMP crscroll ;Scroll up if necessary
+4400 .crnocr LDA hpos ;Are we in the rightmost column?
+4410 CMP #length-1
+4420 BEQ crover2
+4430 INC hpos ;No, so increment hpos
+4440 RTS
+4450 .crover2 LDA #&00 ;Set hpos to far left
+4460 STA hpos
+4470 .crscroll LDA vpos ;Are we on the bottom line?
+4480 CMP #lines-1
+4490 BNE crover3
+4500 JSR sup ;Yes, so scroll up
+4510 RTS
+4520 .crover3 INC vpos ;Increment vpos
+4530 RTS
+4540 .cdown LDA #length ;Set limit to length-hpos
+4550 SEC
+4560 SBC hpos
+4570 STA temp
+4580 LDY #&00 ;Set count to zero
+4590 .cdloop LDA (curpos),Y ;Is there a carriage return at curpos?
+4600 CMP #&0D
+4610 BEQ cdout2 ;Yes, so exit loop
+4620 CMP #&FF ;Have we reached textend?
+4630 BEQ cdout ;Yes, so return
+4640 INY ;Update counter
+4650 CPY temp ;Has count reached limit?
+4660 BEQ cdout2 ;Yes, so exit both loops
+4670 JMP cdloop
+4680 .cdout RTS
+4690 .cdout2 LDA vpos ;Are we on the bottom line?
+4700 CMP #lines-1
+4710 BNE cdover
+4720 JSR sup ;Yes, so scroll up
+4730 JMP cdover2
+4740 .cdover INC vpos ;Increment vpos
+4750 .cdover2 LDA #length ;Set count to length-hpos
+4760 SEC
+4770 SBC hpos
+4780 TAX
+4790 LDY #&00
+4800 .cdloop2 LDA (curpos),Y ;Is there a carriage return at curpos?
+4810 CMP #&0D
+4820 BEQ cdout3 ;Yes, so exit loop
+4830 INC curpos ;Increment curpos
+4840 BNE cdnoinc
+4850 INC curpos+1
+4860 .cdnoinc DEX ;Update counter
+4870 BEQ cdloop3 ;and exit loop if finished
+4880 JMP cdloop2
+4890 .cdout3 LDX #&00 ;Set count to zero
+4900 INC curpos ;and increment curpos
+4910 BNE cdloop3
+4920 INC curpos+1
+4930 .cdloop3 CPX hpos ;Has count reached hpos?
+4940 BEQ cdout5 ;Yes, so exit loop
+4950 LDA (curpos),Y ;Is there a carriage return at curpos?
+4960 CMP #&0D
+4970 BEQ cdout4 ;Yes, so exit loop
+4980 CMP #&FF ;Have we reached textend?
+4990 BEQ cdout4 ;Yes, so exit loop
+5000 INC curpos ;Increment curpos
+5010 BNE cdnoinc2
+5020 INC curpos+1
+5030 .cdnoinc2 INX ;Update counter
+5040 JMP cdloop3
+5050 .cdout4 STX hpos ;Set hpos to count
+5060 .cdout5 RTS
+5070 .cup LDA mempos ;Are we on the top line?
+5080 CMP textstart
+5090 BNE cuok
+5100 LDA mempos+1
+5110 CMP textstart+1
+5120 BNE cuok
+5130 LDA vpos
+5140 BNE cuok
+5150 RTS ;Yes, so return
+5160 .cuok LDX #length ;Set count to length
+5170 LDY #&00
+5180 .culoop LDA curpos ;Decrement curpos
+5190 SEC
+5200 SBC #&01
+5210 STA curpos
+5220 LDA curpos+1
+5230 SBC #&00
+5240 STA curpos+1
+5250 DEX ;Update counter
+5260 BEQ cunocr ;and exit loop if finished
+5270 LDA (curpos),Y ;Is there a carriage return at curpos?
+5280 CMP #&0D
+5290 BNE culoop ;No, so loop back
+5300 JSR nlcalc ;Get column number of carriage return
+5310 CMP hpos ;Is it greater than hpos?
+5320 BCC cuover
+5330 BEQ cuover
+5340 SEC ;Yes, so calculate new value for count
+5350 SBC hpos
+5360 TAX
+5370 JMP culoop ;and loop back
+5380 .cuover STA hpos ;Store correct value in hpos
+5390 .cunocr LDA vpos ;Are we on the top line?
+5400 BNE cuover2
+5410 JSR sdown ;Yes, so scroll down
+5420 RTS
+5430 .cuover2 DEC vpos ;Decrement vpos
+5440 RTS
+5450 .sdown LDA mempos ;Decrement menpos
+5460 SEC
+5470 SBC #&01
+5480 STA mempos
+5490 LDA mempos+1
+5500 SBC #&00
+5510 STA mempos+1
+5520 LDY #&00
+5530 LDA (mempos),Y ;Is there a carriage return at menpos?
+5540 CMP #&0D
+5550 BNE sdover
+5560 LDA curpos ;Yes, so store curpos
+5570 PHA
+5580 LDA curpos+1
+5590 PHA
+5600 LDA mempos ;and transfer mempos into curpos
+5610 STA curpos ;(nlcalc reads parameter from curpos)
+5620 LDA mempos+1
+5630 STA curpos+1
+5640 JSR nlcalc ;Get column number of carriage return
+5650 STA temp
+5660 PLA ;Restore curpos
+5670 STA curpos+1
+5680 PLA
+5690 STA curpos
+5700 LDA mempos ;Subtract column number from mempos
+5710 SEC
+5720 SBC temp
+5730 STA mempos
+5740 LDA mempos+1
+5750 SBC #&00
+5760 STA mempos+1
+5770 JMP sdout
+5780 .sdover LDA mempos ;Set mempos to mempos-(length-1)
+5790 SEC
+5800 SBC #length-1
+5810 STA mempos
+5820 LDA mempos+1
+5830 SBC #&00
+5840 STA mempos+1
+5850 .sdout RTS
+5860 .sup LDX #length-1 ;Set count to length-1
+5870 LDY #&00
+5880 .suloop LDA (mempos),Y ;Is there a carriage return at mempos?
+5890 CMP #&00
+5900 BEQ suout ;Yes, so exit loop
+5910 INC mempos ;Increment mempos
+5920 BNE suover
+5930 INC mempos+1
+5940 .suover DEX ;Update counter
+5950 BNE suloop ;and exit loop if finished
+5960 .suout INC mempos ;Increment meapos
+5970 BNE suout2
+5980 INC mempos+1
+5990 .suout2 RTS
+6000 .rubout LDA curpos ;Are we at textstart?
+6010 CMP textstart
+6020 BNE rok
+6030 LDA curpos+1
+6040 CMP textstart+1
+6050 BNE rok
+6060 LDA #&07 ;Yes, so beep and return
+6070 JSR oswrch
+6080 RTS
+6090 .rok JSR cleft ;Move cursor left
+6100 LDA curpos ;Copy curpos into temp
+6110 STA temp
+6120 CLC ;and copy curpos+1 into temp+2
+6130 ADC #&01
+6140 STA temp+2
+6150 LDA curpos+1
+6160 STA temp+1
+6170 ADC #&00
+6180 STA temp+3
+6190 LDY #&00
+6200 .rloop LDA (temp+2),Y ;Copy contents of teap+2 into tenp
+6210 STA (temp),Y
+6220 CMP #&FF ;Have we reached textend?
+6230 BEQ rout
+6240 INC temp ;Increment temp
+6250 BNE rnoinc
+6260 INC temp+1
+6270 .rnoinc INC temp+2 ;Increment temp+2
+6280 BNE rnoinc2
+6290 INC temp+3
+6300 .rnoinc2  JMP rloop
+6310 .rout LDA textend ;Decrement textend
+6320 SEC
+6330 SBC #&01
+6340 STA textend
+6350 LDA textend+1
+6360 SBC #&00
+6370 STA textend+1
+6380 RTS
+6390 .write PHA ;Store A (holds value of key pressed)
+6400 LDA textend ;Have we run out of memory?
+6410 CMP #last MOD 256
+6420 BNE wok
+6430 LDA textend+1
+6440 CMP #last DIV 256
+6450 BNE wok
+6460 LDA #&07 ;Yes, so beep, retrieve A and return
+6470 JSR oswrch
+6480 PLA
+6490 RTS
+6500 .wok LDA textend ;Copy textend into temp
+6510 STA temp
+6520 CLC ;and copy textend+1 into temp+2
+6530 ADC #&01
+6540 STA temp+2
+6550 LDA textend+1
+6560 STA temp+1
+6570 ADC #&00
+6580 STA temp+3
+6590 LDY #&00
+6600 .wloop LDA (temp),Y ;Copy contents of temp into temp+2
+6610 STA (temp+2),Y
+6620 LDA temp ;Decrement temp
+6630 SEC
+6640 SBC #&01
+6650 STA temp
+6660 LDA temp+1
+6670 SBC #&00
+6680 STA temp+1
+6690 LDA temp+2 ;Decrement temp+2
+6700 SEC
+6710 SBC #&01
+6720 STA temp+2
+6730 LDA temp+3
+6740 SBC #&00
+6750 STA temp+3
+6760 LDA temp+2 ;Have we reached curpos?
+6770 CMP curpos
+6780 BNE wloop
+6790 LDA temp+3
+6800 CMP curpos+1
+6810 BNE wloop
+6820 PLA ;Yes, so retrieve A
+6830 STA (curpos),Y ;Insert character
+6840 INC textend ;Increment textend
+6850 BNE wnoinc
+6860 INC textend+1
+6870 .wnoinc JSR cright ;Move cursor right
+6880 RTS
+6890 .nlcalc LDA #&00 ;Start count at zero
+6900 STA temp
+6910 STA temp+1
+6920 LDA curpos ;Copy curpos into temp+2
+6930 STA temp+2
+6940 LDA curpos+1
+6950 STA temp+3
+6960 LDA textstart ;Copy textstart-1 into temp+4
+6970 SEC
+6980 SBC #&01
+6990 STA temp+4
+7000 LDA textstart+1
+7010 SBC #&00
+7020 STA temp+5
+7030 LDY #&00
+7040 .nloop INC temp ;Update counter
+7050 BNE noinc
+7060 INC temp+1
+7070 .noinc LDA temp+2 ;Decrement copy of curpos
+7080 SEC
+7090 SBC #&01
+7100 STA temp+2
+7110 LDA temp+3
+7120 SBC #&00
+7130 STA temp+3
+7140 LDA (temp+2),Y ;Is there a carriage return there?
+7150 CMP #&0D
+7160 BEQ nout ;Yes, so exit loop
+7170 LDA temp+2 ;Has copy of curpos hit textstart-1?
+7180 CMP temp+4
+7190 BNE nloop ;No, so loop back
+7200 LDA temp+3
+7210 CMP temp+5
+7220 BNE nloop
+7230 .nout LDA temp+1 ;Is count>length+1?
+7240 BNE nover
+7250 LDA temp
+7260 CMP #length+1
+7270 BCC nout2
+7280 .nover LDA temp ;Yes, go subtract length from count
+7290 SEC
+7300 SBC #length
+7310 STA temp
+7320 LDA temp+1
+7330 SBC #&00
+7340 STA temp+1
+7350 JMP nout
+7360 .nout2 DEC temp ;Decrement temp
+7370 LDA temp ;Return with wanted value
+7380 RTS
+7400 .buffer
+7410 ]
+7420 NEXT
+7430 END
